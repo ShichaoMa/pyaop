@@ -9,7 +9,7 @@ import six
 from collections import namedtuple
 
 
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 
 
 class AOPReturn(Exception):
@@ -146,7 +146,8 @@ class ProxyMeta(type):
                      "__dir__",
                      "__bool__",
                      "__repr__",
-                     "__unicode__"}
+                     "__unicode__",
+                     "__getattribute__"}
 
     def __new__(cls, name, bases, props):
         for magic_method in cls.magic_methods:

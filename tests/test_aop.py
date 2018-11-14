@@ -4,6 +4,7 @@ from pyaop import Proxy, AOP, Return
 
 class A(object):
     a = 3
+    store = None
 
     def __init__(self):
         self.b = 3
@@ -19,6 +20,10 @@ class A(object):
 
     def bar(self, f, g):
         return f + g
+
+    @classmethod
+    def foo(cls):
+        return cls.store
 
 
 class TestProxy(object):
