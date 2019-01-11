@@ -1,5 +1,7 @@
 # -*- coding:utf-8 -*-
-from pyaop import Proxy, AOP, Return
+import pytest
+
+from pyaop import Proxy, AOP, Return, NotImplementedMethod
 
 
 class A(object):
@@ -148,3 +150,36 @@ class TestProxy(object):
         assert hasattr(aa, "b")
         AOP.object_del(aa, "b")
         assert not hasattr(aa, "b")
+
+    def test_other_magic_method_not_implement(self):
+        a1 = A()
+        a2 = A()
+        p1 = Proxy(a1)
+        p2 = Proxy(a2)
+        with pytest.raises(NotImplementedMethod):
+            divmod(p1, 2)
+
+    def test_property_not_exist(self):
+        a1 = A()
+        p1 = Proxy(a1)
+        with pytest.raises(AttributeError):
+            p1.ddd
+
+    def test_property_not_exist_with_getattr(self):
+        class A(object):
+            def __getattr__(self, item):
+                return 1
+        a1 = A()
+
+        p1 = Proxy(a1)
+        p1.ddd
+
+        class B(object):
+            def __getattr__(self, item):
+                raise AttributeError()
+
+        a2 = B()
+
+        p2 = Proxy(a2)
+        with pytest.raises(AttributeError):
+            p2.eee

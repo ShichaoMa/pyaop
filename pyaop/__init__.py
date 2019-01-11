@@ -6,18 +6,59 @@
 """
 import six
 
+from functools import partial
 from collections import namedtuple
 
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 
 class AOPReturn(Exception):
     pass
 
 
+class NotImplementedMethod(AttributeError):
+    """
+    继承于AttributeError是因为对于hasattr这个函数，会调用getattr，
+    如果返回AttributeError，则认定为False, 其它错误会直接抛出，
+    所以对于未实现__getattr__的类，则返回NotImplementedMethod会被认定为False。
+    """
+    pass
+
+
+class NotImplementedProp(AttributeError):
+    """
+    未实现的属性获取时发生的异常
+    """
+    pass
+
+
+def __getattr__(self, name):
+    """
+    被代理的类未实现__getattr__时，使用这个方法
+    即然被代理的类被调用了这个方法，证明获取属性失败
+    所以要抛出异常。
+    :param self:
+    :param name:
+    :return:
+    """
+    raise NotImplementedProp("'{}' object has no attribute '{}'".format(
+        self.__class__.__name__, name))
+
+
 def Return(value):
     raise AOPReturn(value)
+
+
+def get_name_of(func):
+    """
+    func可能是partial
+    :param func:
+    :return:
+    """
+    if isinstance(func, partial):
+        func = func.func
+    return func.__name__
 
 
 class AOP(object):
@@ -38,20 +79,23 @@ class AOP(object):
         except AttributeError:
             proxy_methods = []
 
-        if func.__name__ == "__getattribute__" and args[0] in proxy_methods:
+        func_name = get_name_of(func)
+        if func_name == "__getattribute__" and args[0] in proxy_methods:
             return self.object_get(proxy, args[0])
 
         try:
             for before in self.before:
-                if func.__name__ in before.types:
+                if func_name in before.types:
                     ret = before.func(proxy, *args, **kwargs)
                     # 有返回值，才设置新的实参
                     if ret:
                         args, kwargs = ret
-            ret_val = func(*args, **kwargs)
-
+            try:
+                ret_val = func(*args, **kwargs)
+            except NotImplementedProp as e:
+                raise AttributeError(e)
             for after in self.after:
-                if func.__name__ in after.types:
+                if func_name in after.types:
                     ret_val = after.func(proxy, ret_val)
 
             return ret_val
@@ -75,7 +119,17 @@ def aop_decorator(name, module=__name__):
     def inner(*args, **kwargs):
         aop = AOP.object_get(args[0], "_proxy_aop")
         proxy_obj = AOP.object_get(args[0], "_proxy_obj")
-        return aop(AOP.object_get(proxy_obj, name), *args, **kwargs)
+        try:
+            func = AOP.object_get(proxy_obj, name)
+        except AttributeError:
+            # 对于由于属性不存在导致通过__getattr__获取属性的方式
+            # 如果被代理的类没有定义___getattr__，则构造一个假的
+            if name == "__getattr__":
+                func = partial(__getattr__, args[0])
+            else:
+                class_name = proxy_obj.__class__.__name__
+                raise NotImplementedMethod("{} of {}".format(name, class_name))
+        return aop(func, *args, **kwargs)
 
     inner.__name__ = name
     inner.__module__ = module
